@@ -10,7 +10,6 @@ from keras.callbacks import ModelCheckpoint
 from keras.utils import np_utils
 import sys 
 import codecs
-from sets import Set
 import re
 
 # ===================== Guanglei Deng start ================
@@ -23,21 +22,27 @@ raw_text = re.sub(pattern_prd, '。', raw_text)
 pattern_keep = re.compile(u'[^\u4E00-\u9FA5，。：]')
 raw_text = re.sub(pattern_keep, '', raw_text)
 
-# build the dictionary of every characters, the value is [id, times]
-charcs = {}
-i = 0
-for charc in raw_text:
-	if charc not in charcs:
-		charcs[charc] = [i, 1]
-		i += 1
+# build the dictionary of every characters, the value is [0(id), times]
+chars = {}
+for char in raw_text:
+	if char not in chars:
+		chars[char] = [0, 1]
 	else:
-		charcs[charc][1] += 1
+		chars[char][1] += 1
 
 # build the dictionary of characters only appear once
 char_cut = {}
-for charc in charcs:
-	if charcs[charc][1] <= 4:
-		char_cut[charc] = 1
+for char in chars:
+	if chars[char][1] == 1:
+		char_cut[char] = 1
+
+# build the dictionary exclude the rare-appeared word. Map each word an id
+for char in char_cut:
+	chars.pop(char)
+i = 0
+for char in chars:
+	chars[char][0] = i
+	i += 1
 
 def get_next_end(text):
 	end_pos = text.find('。')
@@ -63,21 +68,9 @@ def get_all_lines(text):
 		else:
 			break
 	return lines
-# ===================== Guanglei Deng end ==================
 
-# ===================== pre-processing =====================
 text_lines = get_all_lines(raw_text)
-char_collection = Set()
-for line in text_lines:
-	for char in line:
-		char_collection.add(char)
-
-index = 0
-char_dic = {}
-for char in char_collection:
-	char_dic[char] = [index, 0]
-	index += 1
-# ===================== pre-processing end =====================
+# ===================== Guanglei Deng end ==================
 
 # ===================== Xue Chen start =====================
 def data_pro(lines,minlen,ngram,chardic):
@@ -98,7 +91,7 @@ def data_pro(lines,minlen,ngram,chardic):
 # ===================== Xue Chen end =======================
 
 # ===================== Pre-processing =====================
-processed_data = data_pro(text_lines, 7, 7, char_dic)
+processed_data = data_pro(text_lines, 7, 7, chars)
 dataX = processed_data['dataX']
 dataY = processed_data['dataY']
 n_vocab = processed_data['vocab_num']
@@ -110,7 +103,27 @@ X = numpy.reshape(dataX, (patterns, seq_length, 1))
 # normalize
 X = X / float(n_vocab)
 # one hot encode the output variable
-y = np_utils.to_categorical(dataY)
+ynum_classes = max(dataY)
+y_len = len(dataY)
+
+step = y_len/10
+start = 0
+end = y_len/10
+
+y = np_utils.to_categorical(dataY[start:end], ynum_classes)
+start = end
+end += step
+
+while True:
+	if end < y_len:
+		ytemp = np_utils.to_categorical(dataY[start:end],ynum_classes)
+		y = numpy.concatenate((y, ytemp))
+	else:
+		ytemp = np_utils.to_categorical(dataY[start:],ynum_classes)
+		y = numpy.concatenate((y, ytemp))
+		break
+	start = end
+	end += step
 # ===================== Pre-processing end =================
 
 # ===================== Weilun Chen start ==================
